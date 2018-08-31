@@ -161,4 +161,7 @@
     <!-- Ignore post running notifications for selected apps -->
     <string-array name="config_postNotificationIgnoredApps" translatable="false">
     </string-array>
+
+    <!-- Whether to allow process with media UID to access CameraServiceProxy -->
+    <bool name="config_allowMediaUidForCameraServiceProxy">false</bool>
 </resources>
