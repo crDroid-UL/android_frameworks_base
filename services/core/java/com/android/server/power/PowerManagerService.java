@@ -71,7 +71,6 @@ import android.os.Handler;
 import android.os.HandlerExecutor;
 import android.os.IBinder;
 import android.os.IPowerManager;
-import android.os.IWakeLockCallback;
 import android.os.Looper;
 import android.os.Message;
 import android.os.ParcelDuration;
@@ -1628,6 +1627,7 @@ public final class PowerManagerService extends SystemService
         } catch (PackageManager.NameNotFoundException e) {
             // assume app is not privileged
         }
+            String packageName, WorkSource ws, String historyTag, int uid, int pid) {
         synchronized (mLock) {
             if (displayId != Display.INVALID_DISPLAY) {
                 final DisplayInfo displayInfo =
@@ -1651,12 +1651,11 @@ public final class PowerManagerService extends SystemService
             boolean notifyAcquire;
             if (index >= 0) {
                 wakeLock = mWakeLocks.get(index);
-                if (!wakeLock.hasSameProperties(flags, tag, ws, uid, pid, callback)) {
+                if (!wakeLock.hasSameProperties(flags, tag, ws, uid, pid)) {
                     // Update existing wake lock.  This shouldn't happen but is harmless.
                     notifyWakeLockChangingLocked(wakeLock, flags, tag, packageName,
-                            uid, pid, ws, historyTag, callback);
-                    wakeLock.updateProperties(flags, tag, packageName, ws, historyTag, uid, pid,
-                            callback);
+                            uid, pid, ws, historyTag);
+                    wakeLock.updateProperties(flags, tag, packageName, ws, historyTag, uid, pid);
                 }
                 notifyAcquire = false;
             } else {
@@ -1668,7 +1667,12 @@ public final class PowerManagerService extends SystemService
                 }
                 state.mNumWakeLocks++;
                 wakeLock = new WakeLock(lock, displayId, flags, tag, packageName, ws, historyTag,
-                        uid, pid, state, callback);
+                        uid, pid, state);
+                try {
+                    lock.linkToDeath(wakeLock, 0);
+                } catch (RemoteException ex) {
+                    throw new IllegalArgumentException("Wake lock is already dead.");
+                }
                 mWakeLocks.add(wakeLock);
                 setWakeLockDisabledStateLocked(wakeLock);
                 notifyAcquire = true;
@@ -1808,8 +1812,11 @@ public final class PowerManagerService extends SystemService
                 mRequestWaitForNegativeProximity = true;
             }
 
-            wakeLock.unlinkToDeath();
-            wakeLock.setDisabled(true);
+            try {
+                wakeLock.mLock.unlinkToDeath(wakeLock, 0);
+            } catch (NoSuchElementException e) {
+                Slog.wtf(TAG, "Failed to unlink wakelock", e);
+            }
             removeWakeLockLocked(wakeLock, index);
         }
     }
@@ -1879,37 +1886,9 @@ public final class PowerManagerService extends SystemService
             if (!wakeLock.hasSameWorkSource(ws)) {
                 notifyWakeLockChangingLocked(wakeLock, wakeLock.mFlags, wakeLock.mTag,
                         wakeLock.mPackageName, wakeLock.mOwnerUid, wakeLock.mOwnerPid,
-                        ws, historyTag, null);
+                        ws, historyTag);
                 wakeLock.mHistoryTag = historyTag;
                 wakeLock.updateWorkSource(ws);
-            }
-        }
-    }
-
-    private void updateWakeLockCallbackInternal(IBinder lock, IWakeLockCallback callback,
-            int callingUid) {
-        synchronized (mLock) {
-            int index = findWakeLockIndexLocked(lock);
-            if (index < 0) {
-                if (DEBUG_SPEW) {
-                    Slog.d(TAG, "updateWakeLockCallbackInternal: lock=" + Objects.hashCode(lock)
-                            + " [not found]");
-                }
-                throw new IllegalArgumentException("Wake lock not active: " + lock
-                        + " from uid " + callingUid);
-            }
-
-            WakeLock wakeLock = mWakeLocks.get(index);
-            if (DEBUG_SPEW) {
-                Slog.d(TAG, "updateWakeLockCallbackInternal: lock=" + Objects.hashCode(lock)
-                        + " [" + wakeLock.mTag + "]");
-            }
-
-            if (!isSameCallback(callback, wakeLock.mCallback)) {
-                notifyWakeLockChangingLocked(wakeLock, wakeLock.mFlags, wakeLock.mTag,
-                        wakeLock.mPackageName, wakeLock.mOwnerUid, wakeLock.mOwnerPid,
-                        wakeLock.mWorkSource, wakeLock.mHistoryTag, callback);
-                wakeLock.mCallback = callback;
             }
         }
     }
@@ -1941,7 +1920,7 @@ public final class PowerManagerService extends SystemService
             wakeLock.mNotifiedAcquired = true;
             mNotifier.onWakeLockAcquired(wakeLock.mFlags, wakeLock.mTag, wakeLock.mPackageName,
                     wakeLock.mOwnerUid, wakeLock.mOwnerPid, wakeLock.mWorkSource,
-                    wakeLock.mHistoryTag, wakeLock.mCallback);
+                    wakeLock.mHistoryTag);
             restartNofifyLongTimerLocked(wakeLock);
         }
     }
@@ -1983,13 +1962,11 @@ public final class PowerManagerService extends SystemService
 
     @GuardedBy("mLock")
     private void notifyWakeLockChangingLocked(WakeLock wakeLock, int flags, String tag,
-            String packageName, int uid, int pid, WorkSource ws, String historyTag,
-            IWakeLockCallback callback) {
+            String packageName, int uid, int pid, WorkSource ws, String historyTag) {
         if (mSystemReady && wakeLock.mNotifiedAcquired) {
             mNotifier.onWakeLockChanging(wakeLock.mFlags, wakeLock.mTag, wakeLock.mPackageName,
                     wakeLock.mOwnerUid, wakeLock.mOwnerPid, wakeLock.mWorkSource,
-                    wakeLock.mHistoryTag, wakeLock.mCallback, flags, tag, packageName, uid, pid, ws,
-                    historyTag, callback);
+                    wakeLock.mHistoryTag, flags, tag, packageName, uid, pid, ws, historyTag);
             notifyWakeLockLongFinishedLocked(wakeLock);
             // Changing the wake lock will count as releasing the old wake lock(s) and
             // acquiring the new ones...  we do this because otherwise once a wakelock
@@ -2006,7 +1983,7 @@ public final class PowerManagerService extends SystemService
             wakeLock.mAcquireTime = 0;
             mNotifier.onWakeLockReleased(wakeLock.mFlags, wakeLock.mTag,
                     wakeLock.mPackageName, wakeLock.mOwnerUid, wakeLock.mOwnerPid,
-                    wakeLock.mWorkSource, wakeLock.mHistoryTag, wakeLock.mCallback);
+                    wakeLock.mWorkSource, wakeLock.mHistoryTag);
             notifyWakeLockLongFinishedLocked(wakeLock);
         }
     }
@@ -4358,7 +4335,10 @@ public final class PowerManagerService extends SystemService
                     }
                 }
             }
-            return wakeLock.setDisabled(disabled);
+            if (wakeLock.mDisabled != disabled) {
+                wakeLock.mDisabled = disabled;
+                return true;
+            }
         }
         return false;
     }
@@ -5382,11 +5362,10 @@ public final class PowerManagerService extends SystemService
         public boolean mNotifiedAcquired;
         public boolean mNotifiedLong;
         public boolean mDisabled;
-        public IWakeLockCallback mCallback;
 
         public WakeLock(IBinder lock, int displayId, int flags, String tag, String packageName,
                 WorkSource workSource, String historyTag, int ownerUid, int ownerPid,
-                UidState uidState, @Nullable IWakeLockCallback callback) {
+                UidState uidState) {
             mLock = lock;
             mDisplayId = displayId;
             mFlags = flags;
@@ -5397,43 +5376,15 @@ public final class PowerManagerService extends SystemService
             mOwnerUid = ownerUid;
             mOwnerPid = ownerPid;
             mUidState = uidState;
-            mCallback = callback;
-            linkToDeath();
         }
 
         @Override
         public void binderDied() {
-            unlinkToDeath();
             PowerManagerService.this.handleWakeLockDeath(this);
         }
 
-        private void linkToDeath() {
-            try {
-                mLock.linkToDeath(this, 0);
-            } catch (RemoteException e) {
-                throw new IllegalArgumentException("Wakelock.mLock is already dead.");
-            }
-        }
-
-        @GuardedBy("mLock")
-        void unlinkToDeath() {
-            try {
-                mLock.unlinkToDeath(this, 0);
-            } catch (NoSuchElementException e) {
-                Slog.wtf(TAG, "Failed to unlink Wakelock.mLock", e);
-            }
-        }
-
-        public boolean setDisabled(boolean disabled) {
-            if (mDisabled != disabled) {
-                mDisabled = disabled;
-                return true;
-            } else {
-                return false;
-            }
-        }
         public boolean hasSameProperties(int flags, String tag, WorkSource workSource,
-                int ownerUid, int ownerPid, IWakeLockCallback callback) {
+                int ownerUid, int ownerPid) {
             return mFlags == flags
                     && mTag.equals(tag)
                     && hasSameWorkSource(workSource)
@@ -5442,8 +5393,7 @@ public final class PowerManagerService extends SystemService
         }
 
         public void updateProperties(int flags, String tag, String packageName,
-                WorkSource workSource, String historyTag, int ownerUid, int ownerPid,
-                IWakeLockCallback callback) {
+                WorkSource workSource, String historyTag, int ownerUid, int ownerPid) {
             if (!mPackageName.equals(packageName)) {
                 throw new IllegalStateException("Existing wake lock package name changed: "
                         + mPackageName + " to " + packageName);
@@ -5460,7 +5410,6 @@ public final class PowerManagerService extends SystemService
             mTag = tag;
             updateWorkSource(workSource);
             mHistoryTag = historyTag;
-            mCallback = callback;
         }
 
         public boolean hasSameWorkSource(WorkSource workSource) {
@@ -5742,12 +5691,11 @@ public final class PowerManagerService extends SystemService
 
         @Override // Binder call
         public void acquireWakeLockWithUid(IBinder lock, int flags, String tag,
-                String packageName, int uid, int displayId, IWakeLockCallback callback) {
+                String packageName, int uid, int displayId) {
             if (uid < 0) {
                 uid = Binder.getCallingUid();
             }
-            acquireWakeLock(lock, flags, tag, packageName, new WorkSource(uid), null,
-                    displayId, callback);
+            acquireWakeLock(lock, flags, tag, packageName, new WorkSource(uid), null, displayId);
         }
 
         @Override // Binder call
@@ -5782,8 +5730,7 @@ public final class PowerManagerService extends SystemService
 
         @Override // Binder call
         public void acquireWakeLock(IBinder lock, int flags, String tag, String packageName,
-                WorkSource ws, String historyTag, int displayId,
-                @Nullable IWakeLockCallback callback) {
+                WorkSource ws, String historyTag, int displayId) {
             if (lock == null) {
                 throw new IllegalArgumentException("lock must not be null");
             }
@@ -5823,7 +5770,7 @@ public final class PowerManagerService extends SystemService
             final long ident = Binder.clearCallingIdentity();
             try {
                 acquireWakeLockInternal(lock, displayId, flags, tag, packageName, ws, historyTag,
-                        uid, pid, callback);
+                        uid, pid);
             } finally {
                 Binder.restoreCallingIdentity(ident);
             }
@@ -5832,8 +5779,7 @@ public final class PowerManagerService extends SystemService
         @Override // Binder call
         public void acquireWakeLockAsync(IBinder lock, int flags, String tag, String packageName,
                 WorkSource ws, String historyTag) {
-            acquireWakeLock(lock, flags, tag, packageName, ws, historyTag, Display.INVALID_DISPLAY,
-                    null);
+            acquireWakeLock(lock, flags, tag, packageName, ws, historyTag, Display.INVALID_DISPLAY);
         }
 
         @Override // Binder call
@@ -5895,23 +5841,6 @@ public final class PowerManagerService extends SystemService
             final long ident = Binder.clearCallingIdentity();
             try {
                 updateWakeLockWorkSourceInternal(lock, ws, historyTag, callingUid);
-            } finally {
-                Binder.restoreCallingIdentity(ident);
-            }
-        }
-
-        @Override // Binder call
-        public void updateWakeLockCallback(IBinder lock, IWakeLockCallback callback) {
-            if (lock == null) {
-                throw new IllegalArgumentException("lock must not be null");
-            }
-
-            mContext.enforceCallingOrSelfPermission(android.Manifest.permission.WAKE_LOCK, null);
-
-            final int callingUid = Binder.getCallingUid();
-            final long ident = Binder.clearCallingIdentity();
-            try {
-                updateWakeLockCallbackInternal(lock, callback, callingUid);
             } finally {
                 Binder.restoreCallingIdentity(ident);
             }
@@ -7068,18 +6997,6 @@ public final class PowerManagerService extends SystemService
             }
         }
     };
-
-    static boolean isSameCallback(IWakeLockCallback callback1,
-            IWakeLockCallback callback2) {
-        if (callback1 == callback2) {
-            return true;
-        }
-        if (callback1 != null && callback2 != null
-                && callback1.asBinder() == callback2.asBinder()) {
-            return true;
-        }
-        return false;
-    }
 
     private void cleanupProximity() {
         synchronized (mProximityWakeLock) {

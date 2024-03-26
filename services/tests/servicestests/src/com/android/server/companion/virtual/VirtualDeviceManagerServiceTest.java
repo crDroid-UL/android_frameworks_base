@@ -324,12 +324,12 @@ public class VirtualDeviceManagerServiceTest {
     public void onVirtualDisplayCreatedLocked_wakeLockIsAcquired() throws RemoteException {
         verify(mIPowerManagerMock, never()).acquireWakeLock(any(Binder.class), anyInt(),
                 nullable(String.class), nullable(String.class), nullable(WorkSource.class),
-                nullable(String.class), anyInt(), eq(null));
+                nullable(String.class), anyInt());
         mDeviceImpl.onVirtualDisplayCreatedLocked(
                 mDeviceImpl.createWindowPolicyController(), DISPLAY_ID);
         verify(mIPowerManagerMock).acquireWakeLock(any(Binder.class), anyInt(),
                 nullable(String.class), nullable(String.class), nullable(WorkSource.class),
-                nullable(String.class), eq(DISPLAY_ID), eq(null));
+                nullable(String.class), eq(DISPLAY_ID));
     }
 
     @Test
@@ -343,7 +343,7 @@ public class VirtualDeviceManagerServiceTest {
         TestableLooper.get(this).processAllMessages();
         verify(mIPowerManagerMock).acquireWakeLock(any(Binder.class), anyInt(),
                 nullable(String.class), nullable(String.class), nullable(WorkSource.class),
-                nullable(String.class), eq(DISPLAY_ID), eq(null));
+                nullable(String.class), eq(displayId));
     }
 
     @Test
@@ -362,7 +362,7 @@ public class VirtualDeviceManagerServiceTest {
         verify(mIPowerManagerMock).acquireWakeLock(wakeLockCaptor.capture(),
                 anyInt(),
                 nullable(String.class), nullable(String.class), nullable(WorkSource.class),
-                nullable(String.class), eq(DISPLAY_ID), eq(null));
+                nullable(String.class), eq(displayId));
 
         IBinder wakeLock = wakeLockCaptor.getValue();
         mDeviceImpl.onVirtualDisplayRemovedLocked(DISPLAY_ID);
@@ -378,7 +378,7 @@ public class VirtualDeviceManagerServiceTest {
         verify(mIPowerManagerMock).acquireWakeLock(wakeLockCaptor.capture(),
                 anyInt(),
                 nullable(String.class), nullable(String.class), nullable(WorkSource.class),
-                nullable(String.class), eq(DISPLAY_ID), eq(null));
+                nullable(String.class), eq(displayId));
         IBinder wakeLock = wakeLockCaptor.getValue();
 
         // Close the VirtualDevice without first notifying it of the VirtualDisplay removal.

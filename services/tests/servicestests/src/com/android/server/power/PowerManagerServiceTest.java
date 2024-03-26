@@ -67,7 +67,6 @@ import android.os.BatterySaverPolicyConfig;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
-import android.os.IWakeLockCallback;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.os.PowerSaveState;
@@ -105,7 +104,6 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.stubbing.Answer;
 
@@ -611,21 +609,21 @@ public class PowerManagerServiceTest {
         // First, ensure that a normal full wake lock does not cause a wakeup
         int flags = PowerManager.FULL_WAKE_LOCK;
         mService.getBinderServiceInstance().acquireWakeLock(token, flags, tag, packageName,
-                null /* workSource */, null /* historyTag */, Display.INVALID_DISPLAY, null);
+                null /* workSource */, null /* historyTag */, Display.INVALID_DISPLAY);
         assertThat(mService.getGlobalWakefulnessLocked()).isEqualTo(WAKEFULNESS_ASLEEP);
         mService.getBinderServiceInstance().releaseWakeLock(token, 0 /* flags */);
 
         // Ensure that the flag does *NOT* work with a partial wake lock.
         flags = PowerManager.PARTIAL_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP;
         mService.getBinderServiceInstance().acquireWakeLock(token, flags, tag, packageName,
-                null /* workSource */, null /* historyTag */, Display.INVALID_DISPLAY, null);
+                null /* workSource */, null /* historyTag */, Display.INVALID_DISPLAY);
         assertThat(mService.getGlobalWakefulnessLocked()).isEqualTo(WAKEFULNESS_ASLEEP);
         mService.getBinderServiceInstance().releaseWakeLock(token, 0 /* flags */);
 
         // Verify that flag forces a wakeup when paired to a FULL_WAKE_LOCK
         flags = PowerManager.FULL_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP;
         mService.getBinderServiceInstance().acquireWakeLock(token, flags, tag, packageName,
-                null /* workSource */, null /* historyTag */, Display.INVALID_DISPLAY, null);
+                null /* workSource */, null /* historyTag */, Display.INVALID_DISPLAY);
         assertThat(mService.getGlobalWakefulnessLocked()).isEqualTo(WAKEFULNESS_AWAKE);
         mService.getBinderServiceInstance().releaseWakeLock(token, 0 /* flags */);
     }
@@ -892,12 +890,12 @@ public class PowerManagerServiceTest {
             wakelockMap.put((String) inv.getArguments()[1], (int) inv.getArguments()[0]);
             return null;
         }).when(mNotifierMock).onWakeLockAcquired(anyInt(), anyString(), anyString(), anyInt(),
-                anyInt(), any(), any(), any());
+                anyInt(), any(), any());
         doAnswer(inv -> {
             wakelockMap.remove((String) inv.getArguments()[1]);
             return null;
         }).when(mNotifierMock).onWakeLockReleased(anyInt(), anyString(), anyString(), anyInt(),
-                anyInt(), any(), any(), any());
+                anyInt(), any(), any());
 
         //
         // TEST STARTS HERE
@@ -909,7 +907,7 @@ public class PowerManagerServiceTest {
 
         // Create a wakelock
         mService.getBinderServiceInstance().acquireWakeLock(new Binder(), flags, tag, pkg,
-                null /* workSource */, null /* historyTag */, Display.INVALID_DISPLAY, null);
+                null /* workSource */, null /* historyTag */, Display.INVALID_DISPLAY);
         assertThat(wakelockMap.get(tag)).isEqualTo(flags);  // Verify wakelock is active.
 
         // Confirm that the wakelocks have been disabled when the forceSuspend is in flight.
@@ -1129,7 +1127,7 @@ public class PowerManagerServiceTest {
         // Take a nap and verify we no longer hold the blocker
         int flags = PowerManager.DOZE_WAKE_LOCK;
         mService.getBinderServiceInstance().acquireWakeLock(token, flags, tag, packageName,
-                null /* workSource */, null /* historyTag */, Display.INVALID_DISPLAY, null);
+                null /* workSource */, null /* historyTag */, Display.INVALID_DISPLAY);
         when(mDreamManagerInternalMock.isDreaming()).thenReturn(true);
         mService.getBinderServiceInstance().goToSleep(mClock.now(),
                 PowerManager.GO_TO_SLEEP_REASON_APPLICATION, 0);
@@ -1306,7 +1304,7 @@ public class PowerManagerServiceTest {
 
         mService.getBinderServiceInstance().acquireWakeLock(token,
                 PowerManager.SCREEN_BRIGHT_WAKE_LOCK, tag, pkg,
-                null /* workSource */, null /* historyTag */, Display.INVALID_DISPLAY, null);
+                null /* workSource */, null /* historyTag */, Display.INVALID_DISPLAY);
 
         assertThat(mService.getGlobalWakefulnessLocked()).isEqualTo(WAKEFULNESS_AWAKE);
         advanceTime(60);
@@ -1332,7 +1330,7 @@ public class PowerManagerServiceTest {
 
         mService.getBinderServiceInstance().acquireWakeLock(token,
                 PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ON_AFTER_RELEASE, tag, pkg,
-                null /* workSource */, null /* historyTag */, Display.DEFAULT_DISPLAY, null);
+                null /* workSource */, null /* historyTag */, Display.DEFAULT_DISPLAY);
 
         advanceTime(1500);
         mService.getBinderServiceInstance().releaseWakeLock(token, 0 /* flags */);
@@ -1425,7 +1423,7 @@ public class PowerManagerServiceTest {
 
         mService.getBinderServiceInstance().acquireWakeLock(token,
                 PowerManager.SCREEN_BRIGHT_WAKE_LOCK, tag, pkg,
-                null /* workSource */, null /* historyTag */, Display.DEFAULT_DISPLAY, null);
+                null /* workSource */, null /* historyTag */, Display.DEFAULT_DISPLAY);
 
         assertThat(mService.getGlobalWakefulnessLocked()).isEqualTo(WAKEFULNESS_AWAKE);
         assertThat(mService.getWakefulnessLocked(Display.DEFAULT_DISPLAY_GROUP)).isEqualTo(
@@ -1465,7 +1463,7 @@ public class PowerManagerServiceTest {
 
         mService.getBinderServiceInstance().acquireWakeLock(token,
                 PowerManager.SCREEN_BRIGHT_WAKE_LOCK, tag, pkg,
-                null /* workSource */, null /* historyTag */, Display.INVALID_DISPLAY, null);
+                null /* workSource */, null /* historyTag */, Display.INVALID_DISPLAY);
 
         assertThat(mService.getGlobalWakefulnessLocked()).isEqualTo(WAKEFULNESS_AWAKE);
         assertThat(mService.getWakefulnessLocked(Display.DEFAULT_DISPLAY_GROUP)).isEqualTo(
@@ -1511,7 +1509,7 @@ public class PowerManagerServiceTest {
 
         mService.getBinderServiceInstance().acquireWakeLock(token,
                 PowerManager.SCREEN_BRIGHT_WAKE_LOCK, tag, pkg,
-                null /* workSource */, null /* historyTag */, nonDefaultDisplay, null);
+                null /* workSource */, null /* historyTag */, nonDefaultDisplay);
 
         assertThat(mService.getWakefulnessLocked(Display.DEFAULT_DISPLAY_GROUP)).isEqualTo(
                 WAKEFULNESS_AWAKE);
@@ -2276,65 +2274,7 @@ public class PowerManagerServiceTest {
         IBinder token = new Binder();
         String packageName = "pkg.name";
         mService.getBinderServiceInstance().acquireWakeLock(token, flags, tag, packageName,
-                null /* workSource */, null /* historyTag */, Display.INVALID_DISPLAY,
-                null /* callback */);
+                null /* workSource */, null /* historyTag */, Display.INVALID_DISPLAY);
         return mService.findWakeLockLocked(token);
-    }
-
-    /**
-     * Test IPowerManager.acquireWakeLock() with a IWakeLockCallback.
-     */
-    @Test
-    public void testNotifyWakeLockCallback() {
-        createService();
-        startSystem();
-        final String tag = "wakelock1";
-        final String packageName = "pkg.name";
-        final IBinder token = new Binder();
-        final int flags = PowerManager.PARTIAL_WAKE_LOCK;
-        final IWakeLockCallback callback = Mockito.mock(IWakeLockCallback.class);
-        final IBinder callbackBinder = Mockito.mock(Binder.class);
-        when(callback.asBinder()).thenReturn(callbackBinder);
-        mService.getBinderServiceInstance().acquireWakeLock(token, flags, tag, packageName,
-                null /* workSource */, null /* historyTag */, Display.INVALID_DISPLAY, callback);
-        verify(mNotifierMock).onWakeLockAcquired(anyInt(), eq(tag), eq(packageName), anyInt(),
-                anyInt(), any(), any(), same(callback));
-
-        mService.getBinderServiceInstance().releaseWakeLock(token, 0);
-        verify(mNotifierMock).onWakeLockReleased(anyInt(), eq(tag), eq(packageName), anyInt(),
-                anyInt(), any(), any(), same(callback));
-    }
-
-    /**
-     * Test IPowerManager.updateWakeLockCallback() with a new IWakeLockCallback.
-     */
-    @Test
-    public void testNotifyWakeLockCallbackChange() {
-        createService();
-        startSystem();
-        final String tag = "wakelock1";
-        final String packageName = "pkg.name";
-        final IBinder token = new Binder();
-        int flags = PowerManager.PARTIAL_WAKE_LOCK;
-        final IWakeLockCallback callback1 = Mockito.mock(IWakeLockCallback.class);
-        final IBinder callbackBinder1 = Mockito.mock(Binder.class);
-        when(callback1.asBinder()).thenReturn(callbackBinder1);
-        mService.getBinderServiceInstance().acquireWakeLock(token, flags, tag, packageName,
-                null /* workSource */, null /* historyTag */, Display.INVALID_DISPLAY, callback1);
-        verify(mNotifierMock).onWakeLockAcquired(anyInt(), eq(tag), eq(packageName), anyInt(),
-                anyInt(), any(), any(), same(callback1));
-
-        final IWakeLockCallback callback2 = Mockito.mock(IWakeLockCallback.class);
-        final IBinder callbackBinder2 = Mockito.mock(Binder.class);
-        when(callback2.asBinder()).thenReturn(callbackBinder2);
-        mService.getBinderServiceInstance().updateWakeLockCallback(token, callback2);
-        verify(mNotifierMock).onWakeLockChanging(anyInt(), eq(tag), eq(packageName),
-                anyInt(), anyInt(), any(), any(), same(callback1),
-                anyInt(), eq(tag), eq(packageName), anyInt(), anyInt(), any(), any(),
-                same(callback2));
-
-        mService.getBinderServiceInstance().releaseWakeLock(token, 0);
-        verify(mNotifierMock).onWakeLockReleased(anyInt(), eq(tag), eq(packageName), anyInt(),
-                anyInt(), any(), any(), same(callback2));
     }
 }

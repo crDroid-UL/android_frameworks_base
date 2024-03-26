@@ -33,7 +33,6 @@ import android.metrics.LogMaker;
 import android.net.Uri;
 import android.os.BatteryStats;
 import android.os.Handler;
-import android.os.IWakeLockCallback;
 import android.os.Looper;
 import android.os.Message;
 import android.os.PowerManager;
@@ -223,15 +222,14 @@ public class Notifier {
      * Called when a wake lock is acquired.
      */
     public void onWakeLockAcquired(int flags, String tag, String packageName,
-            int ownerUid, int ownerPid, WorkSource workSource, String historyTag,
-            IWakeLockCallback callback) {
+            int ownerUid, int ownerPid, WorkSource workSource, String historyTag) {
         if (DEBUG) {
             Slog.d(TAG, "onWakeLockAcquired: flags=" + flags + ", tag=\"" + tag
                     + "\", packageName=" + packageName
                     + ", ownerUid=" + ownerUid + ", ownerPid=" + ownerPid
                     + ", workSource=" + workSource);
         }
-        notifyWakeLockListener(callback, true);
+
         final int monitorType = getBatteryStatsWakeLockMonitorType(flags);
         if (monitorType >= 0) {
             try {
@@ -309,9 +307,8 @@ public class Notifier {
      */
     public void onWakeLockChanging(int flags, String tag, String packageName,
             int ownerUid, int ownerPid, WorkSource workSource, String historyTag,
-            IWakeLockCallback callback, int newFlags, String newTag, String newPackageName,
-            int newOwnerUid, int newOwnerPid, WorkSource newWorkSource, String newHistoryTag,
-            IWakeLockCallback newCallback) {
+            int newFlags, String newTag, String newPackageName, int newOwnerUid,
+            int newOwnerPid, WorkSource newWorkSource, String newHistoryTag) {
 
         final int monitorType = getBatteryStatsWakeLockMonitorType(flags);
         final int newMonitorType = getBatteryStatsWakeLockMonitorType(newFlags);
@@ -333,16 +330,10 @@ public class Notifier {
             } catch (RemoteException ex) {
                 // Ignore
             }
-        } else if (!PowerManagerService.isSameCallback(callback, newCallback)) {
-            onWakeLockReleased(flags, tag, packageName, ownerUid, ownerPid, workSource, historyTag,
-                    null /* Do not notify the old callback */);
-            onWakeLockAcquired(newFlags, newTag, newPackageName, newOwnerUid, newOwnerPid,
-                    newWorkSource, newHistoryTag, newCallback /* notify the new callback */);
         } else {
-            onWakeLockReleased(flags, tag, packageName, ownerUid, ownerPid, workSource, historyTag,
-                    callback);
+            onWakeLockReleased(flags, tag, packageName, ownerUid, ownerPid, workSource, historyTag);
             onWakeLockAcquired(newFlags, newTag, newPackageName, newOwnerUid, newOwnerPid,
-                    newWorkSource, newHistoryTag, newCallback);
+                    newWorkSource, newHistoryTag);
         }
     }
 
@@ -350,15 +341,14 @@ public class Notifier {
      * Called when a wake lock is released.
      */
     public void onWakeLockReleased(int flags, String tag, String packageName,
-            int ownerUid, int ownerPid, WorkSource workSource, String historyTag,
-            IWakeLockCallback callback) {
+            int ownerUid, int ownerPid, WorkSource workSource, String historyTag) {
         if (DEBUG) {
             Slog.d(TAG, "onWakeLockReleased: flags=" + flags + ", tag=\"" + tag
                     + "\", packageName=" + packageName
                     + ", ownerUid=" + ownerUid + ", ownerPid=" + ownerPid
                     + ", workSource=" + workSource);
         }
-        notifyWakeLockListener(callback, false);
+
         final int monitorType = getBatteryStatsWakeLockMonitorType(flags);
         if (monitorType >= 0) {
             try {
@@ -951,18 +941,6 @@ public class Notifier {
         final boolean silentMode = mAudioManager.getRingerModeInternal()
                 == AudioManager.RINGER_MODE_SILENT;
         return enabled && dndOff && !silentMode;
-    }
-
-    private void notifyWakeLockListener(IWakeLockCallback callback, boolean isEnabled) {
-        if (callback != null) {
-            mHandler.post(() -> {
-                try {
-                    callback.onStateChanged(isEnabled);
-                } catch (RemoteException e) {
-                    throw new IllegalArgumentException("Wakelock.mCallback is already dead.", e);
-                }
-            });
-        }
     }
 
     private final class NotifierHandler extends Handler {
