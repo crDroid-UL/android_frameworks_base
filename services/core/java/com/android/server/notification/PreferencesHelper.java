@@ -2719,7 +2719,7 @@ public class PreferencesHelper implements RankingConfig {
                 synchronized (mPackagePreferences) {
                     PackagePreferences p = getOrCreatePackagePreferencesLocked(
                             pi.packageName, pi.applicationInfo.uid);
-                    if (p.migrateToPm && p.uid != UNKNOWN_UID) {
+                    if (p.migrateToPm && p.uid != INVALID_UID) {
                         try {
                             PackagePermission pkgPerm = new PackagePermission(
                                     p.pkg, UserHandle.getUserId(p.uid),
